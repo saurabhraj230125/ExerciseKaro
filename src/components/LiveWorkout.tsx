@@ -40,7 +40,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
   const [currentDepth, setCurrentDepth] = useState(0) // 0 to 100
 
   // Mutable refs for the requestAnimationFrame loop
-  const requestRef = useRef<number>()
+  const requestRef = useRef<number>(0)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
   const lastVideoTimeRef = useRef(-1)
   
