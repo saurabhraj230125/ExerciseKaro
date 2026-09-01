@@ -32,19 +32,19 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
   const webcamRef = useRef<Webcam>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const router = useRouter()
-  
+
   // Explicitly typed state hooks to prevent TS2554 errors
   const [isLoaded, setIsLoaded] = useState<boolean>(false)
   const [reps, setReps] = useState<number>(0)
   const [isDown, setIsDown] = useState<boolean>(false)
   const [finished, setFinished] = useState<boolean>(false)
-  const [currentDepth, setCurrentDepth] = useState<number>(0) 
+  const [currentDepth, setCurrentDepth] = useState<number>(0)
 
   // Explicitly typed refs
   const requestRef = useRef<number>(0)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
   const lastVideoTimeRef = useRef<number>(-1)
-  
+
   const stateRef = useRef({ reps: 0, isDown: false, finished: false })
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
           runningMode: "VIDEO",
           numPoses: 1,
         })
-        
+
         if (!active) return
         poseLandmarkerRef.current = poseLandmarker
         setIsLoaded(true)
@@ -122,18 +122,18 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
       if (ctx) {
         ctx.save()
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        
+
         if (results.landmarks && results.landmarks.length > 0) {
           const drawingUtils = new DrawingUtils(ctx)
           for (const landmark of results.landmarks) {
             drawingUtils.drawLandmarks(landmark, {
               // Removed strict ! assertions in favor of optional chaining for TS safety
               radius: (data) => DrawingUtils.lerp(data.from?.z ?? 0, -0.15, 0.1, 5, 1),
-              color: "#39ff14", 
+              color: "#39ff14",
               lineWidth: 2,
             })
             drawingUtils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, {
-              color: "#0ff0fc", 
+              color: "#0ff0fc",
               lineWidth: 4,
             })
           }
@@ -143,7 +143,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
             const hip = landmarks[23]
             const knee = landmarks[25]
             const ankle = landmarks[27]
-            
+
             if (hip && knee && ankle) {
               // Nullish coalescing operators (??) guarantee numbers instead of undefined
               if ((hip.visibility ?? 0) > 0.5 && (knee.visibility ?? 0) > 0.5 && (ankle.visibility ?? 0) > 0.5) {
@@ -157,7 +157,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
                 if (angle <= 90) depth = 100
                 else if (angle >= 160) depth = 0
                 else depth = ((160 - angle) / (160 - 90)) * 100
-                
+
                 setCurrentDepth(depth)
 
                 const { isDown } = stateRef.current
@@ -166,7 +166,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
                   stateRef.current.isDown = true
                   setIsDown(true)
                 }
-                
+
                 if (angle > 155 && isDown) {
                   stateRef.current.isDown = false
                   stateRef.current.reps += 1
@@ -178,7 +178,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
                     setFinished(true)
                     setCurrentDepth(0)
                     setTimeout(() => {
-                      onComplete(stateRef.current.reps, 95) 
+                      onComplete(stateRef.current.reps, 95)
                     }, 2000)
                   }
                 }
@@ -208,7 +208,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       <div className="absolute top-0 left-0 right-0 p-4 sm:p-6 z-10 flex justify-between items-start sm:items-center bg-gradient-to-b from-black/80 to-transparent">
-        <button 
+        <button
           onClick={() => router.back()}
           className="p-2 sm:p-3 bg-dark-gray/80 backdrop-blur rounded-full hover:bg-gray-700 transition-colors border border-gray-600 shrink-0"
         >
@@ -216,7 +216,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         </button>
         <div className="text-center flex flex-col items-center flex-1 px-2">
           <h2 className="text-xl sm:text-3xl font-extrabold text-white uppercase tracking-widest drop-shadow-lg leading-tight">{exerciseName}</h2>
-          <motion.p 
+          <motion.p
             key={reps}
             initial={{ scale: 1.5, color: '#ffffff' }}
             animate={{ scale: 1, color: '#39ff14' }}
@@ -228,7 +228,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         </div>
         <div className="flex gap-2 shrink-0">
           {hasPrevious && onPrevious && (
-            <button 
+            <button
               onClick={onPrevious}
               className="p-2 sm:p-3 bg-dark-gray/80 backdrop-blur rounded-full hover:bg-gray-700 transition-colors border border-gray-600"
               title="Previous Exercise"
@@ -237,7 +237,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
             </button>
           )}
           {hasNext && onSkip && (
-            <button 
+            <button
               onClick={onSkip}
               className="p-2 sm:p-3 bg-dark-gray/80 backdrop-blur rounded-full hover:bg-gray-700 transition-colors border border-gray-600"
               title="Skip Exercise"
@@ -265,7 +265,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
 
         {isLoaded && !finished && (
           <div className="absolute right-4 sm:right-6 top-1/4 bottom-1/4 w-4 sm:w-8 bg-black/60 backdrop-blur rounded-full border border-dark-gray overflow-hidden flex flex-col justify-end">
-            <motion.div 
+            <motion.div
               className={`w-full ${isDown ? 'bg-neon-green' : 'bg-neon-blue'}`}
               animate={{ height: `${currentDepth}%` }}
               transition={{ type: 'spring', bounce: 0, duration: 0.1 }}
@@ -281,7 +281,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         )}
 
         <div className="absolute bottom-6 sm:bottom-10 left-6 sm:left-10 right-6 sm:right-10 h-2 sm:h-3 bg-dark-gray/50 backdrop-blur rounded-full overflow-hidden border border-gray-700">
-          <motion.div 
+          <motion.div
             className="h-full bg-gradient-to-r from-neon-blue to-neon-green"
             initial={{ width: 0 }}
             animate={{ width: `${(reps / targetReps) * 100}%` }}
@@ -291,7 +291,7 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
 
         <AnimatePresence>
           {finished && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
@@ -309,7 +309,8 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         </AnimatePresence>
       </div>
 
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .mirror {
           transform: scaleX(-1);
         }
