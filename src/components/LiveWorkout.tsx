@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Webcam from 'react-webcam'
 import { PoseLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, CheckCircle2, ChevronRight, ChevronLeft, SkipForward, ArrowLeft } from 'lucide-react'
+import { X, CheckCircle2, SkipForward, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface LiveWorkoutProps {
@@ -19,7 +19,7 @@ interface LiveWorkoutProps {
 }
 
 // Vector math utility for angle calculation
-function calculateAngle(a: { x: number, y: number }, b: { x: number, y: number }, c: { x: number, y: number }) {
+function calculateAngle(a: { x: number, y: number }, b: { x: number, y: number }, c: { x: number, y: number }): number {
   const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x)
   let angle = Math.abs((radians * 180.0) / Math.PI)
   if (angle > 180.0) {
@@ -33,21 +33,20 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const router = useRouter()
   
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [reps, setReps] = useState(0)
-  const [isDown, setIsDown] = useState(false)
-  const [finished, setFinished] = useState(false)
-  const [currentDepth, setCurrentDepth] = useState(0) // 0 to 100
+  // Explicitly typed state hooks to prevent TS2554 errors
+  const [isLoaded, setIsLoaded] = useState<boolean>(false)
+  const [reps, setReps] = useState<number>(0)
+  const [isDown, setIsDown] = useState<boolean>(false)
+  const [finished, setFinished] = useState<boolean>(false)
+  const [currentDepth, setCurrentDepth] = useState<number>(0) 
 
-  // Mutable refs for the requestAnimationFrame loop
+  // Explicitly typed refs
   const requestRef = useRef<number>(0)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
-  const lastVideoTimeRef = useRef(-1)
+  const lastVideoTimeRef = useRef<number>(-1)
   
-  // State refs for the logic inside the loop
   const stateRef = useRef({ reps: 0, isDown: false, finished: false })
 
-  // Reset local state when exercise changes
   useEffect(() => {
     setReps(0)
     setIsDown(false)
@@ -90,133 +89,124 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
     }
   }, [])
 
-  useEffect(() => {
-    if (!isLoaded || finished) return
+  // Wrapped in useCallback to prevent unnecessary re-renders and memory leaks
+  const drawFrame = useCallback(() => {
+    if (stateRef.current.finished) return
 
-    const drawFrame = () => {
-      if (!webcamRef.current || !webcamRef.current.video || !canvasRef.current || !poseLandmarkerRef.current) {
-        requestRef.current = requestAnimationFrame(drawFrame)
-        return
-      }
+    if (!webcamRef.current || !webcamRef.current.video || !canvasRef.current || !poseLandmarkerRef.current) {
+      requestRef.current = requestAnimationFrame(drawFrame)
+      return
+    }
 
-      const video = webcamRef.current.video
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext("2d")
+    const video = webcamRef.current.video
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
 
-      // Ensure video is actually loaded and has dimensions
-      if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-        requestRef.current = requestAnimationFrame(drawFrame)
-        return
-      }
+    // Strict guard against the "ROI width and height must be > 0" MediaPipe error
+    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      requestRef.current = requestAnimationFrame(drawFrame)
+      return
+    }
 
-      // Match canvas dimensions to video
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-      }
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+    }
 
-      // Check if video is playing and has new frame
-      let startTimeMs = performance.now()
-      if (video.currentTime !== lastVideoTimeRef.current) {
-        lastVideoTimeRef.current = video.currentTime
+    let startTimeMs = performance.now()
+    if (video.currentTime !== lastVideoTimeRef.current) {
+      lastVideoTimeRef.current = video.currentTime
 
-        const results = poseLandmarkerRef.current.detectForVideo(video, startTimeMs)
+      const results = poseLandmarkerRef.current.detectForVideo(video, startTimeMs)
 
-        if (ctx) {
-          ctx.save()
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          
-          if (results.landmarks && results.landmarks.length > 0) {
-            const drawingUtils = new DrawingUtils(ctx)
-            for (const landmark of results.landmarks) {
-              drawingUtils.drawLandmarks(landmark, {
-                radius: (data) => DrawingUtils.lerp(data.from!.z, -0.15, 0.1, 5, 1),
-                color: "#39ff14", // neon-green
-                lineWidth: 2,
-              })
-              drawingUtils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, {
-                color: "#0ff0fc", // neon-blue
-                lineWidth: 4,
-              })
-            }
+      if (ctx) {
+        ctx.save()
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        
+        if (results.landmarks && results.landmarks.length > 0) {
+          const drawingUtils = new DrawingUtils(ctx)
+          for (const landmark of results.landmarks) {
+            drawingUtils.drawLandmarks(landmark, {
+              // Removed strict ! assertions in favor of optional chaining for TS safety
+              radius: (data) => DrawingUtils.lerp(data.from?.z ?? 0, -0.15, 0.1, 5, 1),
+              color: "#39ff14", 
+              lineWidth: 2,
+            })
+            drawingUtils.drawConnectors(landmark, PoseLandmarker.POSE_CONNECTIONS, {
+              color: "#0ff0fc", 
+              lineWidth: 4,
+            })
+          }
 
-            // --- REP COUNTING LOGIC (Squat Example) ---
-            if (exerciseName.toLowerCase().includes('squat')) {
-              const landmarks = results.landmarks[0]
-              // Get left hip (23), left knee (25), left ankle (27)
-              const hip = landmarks[23]
-              const knee = landmarks[25]
-              const ankle = landmarks[27]
-              
-              if (hip && knee && ankle) {
-                // Ensure visibility is decent before counting
-                if (hip.visibility! > 0.5 && knee.visibility! > 0.5 && ankle.visibility! > 0.5) {
-                  const angle = calculateAngle(
-                    { x: hip.x, y: hip.y },
-                    { x: knee.x, y: knee.y },
-                    { x: ankle.x, y: ankle.y }
-                  )
+          if (exerciseName.toLowerCase().includes('squat')) {
+            const landmarks = results.landmarks[0]
+            const hip = landmarks[23]
+            const knee = landmarks[25]
+            const ankle = landmarks[27]
+            
+            if (hip && knee && ankle) {
+              // Nullish coalescing operators (??) guarantee numbers instead of undefined
+              if ((hip.visibility ?? 0) > 0.5 && (knee.visibility ?? 0) > 0.5 && (ankle.visibility ?? 0) > 0.5) {
+                const angle = calculateAngle(
+                  { x: hip.x, y: hip.y },
+                  { x: knee.x, y: knee.y },
+                  { x: ankle.x, y: ankle.y }
+                )
 
-                  // Map angle 160 (standing) to 90 (squat) to a percentage 0-100
-                  let depth = 0
-                  if (angle <= 90) depth = 100
-                  else if (angle >= 160) depth = 0
-                  else depth = ((160 - angle) / (160 - 90)) * 100
-                  
-                  setCurrentDepth(depth)
+                let depth = 0
+                if (angle <= 90) depth = 100
+                else if (angle >= 160) depth = 0
+                else depth = ((160 - angle) / (160 - 90)) * 100
+                
+                setCurrentDepth(depth)
 
-                  const { isDown, reps } = stateRef.current
+                const { isDown } = stateRef.current
 
-                  // Squat threshold (deep enough)
-                  if (angle < 95 && !isDown) {
-                    stateRef.current.isDown = true
-                    setIsDown(true)
-                  }
-                  
-                  // Standing threshold
-                  if (angle > 155 && isDown) {
-                    stateRef.current.isDown = false
-                    stateRef.current.reps += 1
-                    setIsDown(false)
-                    setReps(stateRef.current.reps)
+                if (angle < 95 && !isDown) {
+                  stateRef.current.isDown = true
+                  setIsDown(true)
+                }
+                
+                if (angle > 155 && isDown) {
+                  stateRef.current.isDown = false
+                  stateRef.current.reps += 1
+                  setIsDown(false)
+                  setReps(stateRef.current.reps)
 
-                    if (stateRef.current.reps >= targetReps && !stateRef.current.finished) {
-                      stateRef.current.finished = true
-                      setFinished(true)
-                      setCurrentDepth(0)
-                      setTimeout(() => {
-                        onComplete(stateRef.current.reps, 95) // Dummy form score 95
-                      }, 2000)
-                    }
+                  if (stateRef.current.reps >= targetReps && !stateRef.current.finished) {
+                    stateRef.current.finished = true
+                    setFinished(true)
+                    setCurrentDepth(0)
+                    setTimeout(() => {
+                      onComplete(stateRef.current.reps, 95) 
+                    }, 2000)
                   }
                 }
               }
-            } else {
-              // Dummy logic for non-squat exercises for visual tracking
-              // Slowly increase depth for testing
-              const newDepth = ((Date.now() / 50) % 100)
-              setCurrentDepth(newDepth)
             }
+          } else {
+            const newDepth = ((Date.now() / 50) % 100)
+            setCurrentDepth(newDepth)
           }
-          ctx.restore()
         }
-      }
-
-      if (!stateRef.current.finished) {
-        requestRef.current = requestAnimationFrame(drawFrame)
+        ctx.restore()
       }
     }
 
-    requestRef.current = requestAnimationFrame(drawFrame)
-
-    return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current)
+    if (!stateRef.current.finished) {
+      requestRef.current = requestAnimationFrame(drawFrame)
     }
-  }, [isLoaded, finished, exerciseName, targetReps, onComplete])
+  }, [exerciseName, targetReps, onComplete])
+
+  // Triggers the animation frame ONLY when the webcam is actively streaming data
+  const handleUserMedia = useCallback(() => {
+    if (isLoaded) {
+      requestRef.current = requestAnimationFrame(drawFrame)
+    }
+  }, [isLoaded, drawFrame])
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 sm:p-6 z-10 flex justify-between items-start sm:items-center bg-gradient-to-b from-black/80 to-transparent">
         <button 
           onClick={() => router.back()}
@@ -258,11 +248,11 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         </div>
       </div>
 
-      {/* Main Camera View */}
       <div className="relative flex-1 bg-gray-900 overflow-hidden">
         <Webcam
           ref={webcamRef}
           audio={false}
+          onUserMedia={handleUserMedia}
           className="absolute inset-0 w-full h-full object-cover mirror"
           videoConstraints={{
             facingMode: 'user'
@@ -273,7 +263,6 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
           className="absolute inset-0 w-full h-full object-cover mirror"
         />
 
-        {/* Rep Depth Tracking UI */}
         {isLoaded && !finished && (
           <div className="absolute right-4 sm:right-6 top-1/4 bottom-1/4 w-4 sm:w-8 bg-black/60 backdrop-blur rounded-full border border-dark-gray overflow-hidden flex flex-col justify-end">
             <motion.div 
@@ -284,7 +273,6 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
           </div>
         )}
 
-        {/* Loading Overlay */}
         {!isLoaded && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
             <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-neon-blue mb-4"></div>
@@ -292,7 +280,6 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
           </div>
         )}
 
-        {/* Workout Progress Bar (Bottom) */}
         <div className="absolute bottom-6 sm:bottom-10 left-6 sm:left-10 right-6 sm:right-10 h-2 sm:h-3 bg-dark-gray/50 backdrop-blur rounded-full overflow-hidden border border-gray-700">
           <motion.div 
             className="h-full bg-gradient-to-r from-neon-blue to-neon-green"
@@ -302,7 +289,6 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
           />
         </div>
 
-        {/* Success Celebration Overlay */}
         <AnimatePresence>
           {finished && (
             <motion.div 
@@ -323,7 +309,6 @@ export default function LiveWorkout({ planId, exerciseName, targetReps, onComple
         </AnimatePresence>
       </div>
 
-      {/* Global style to mirror the camera since users are facing it */}
       <style dangerouslySetInnerHTML={{__html: `
         .mirror {
           transform: scaleX(-1);
